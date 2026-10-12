@@ -1,6 +1,6 @@
 [project]
 name = "wecleaner"
-version = "0.5.0"
+version = "0.6.0"
 description = "Wallpaper Engine wallpaper manager: view disk usage, batch-unsubscribe, clean Steam workshop leftovers, restore subscriptions"
 requires-python = ">=3.12"
 dependencies = [

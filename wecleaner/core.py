@@ -235,7 +235,7 @@ class _MeasureTimeout(Exception):
     """单文件夹测量超预算（通常因为 Steam 正在写入/删除该目录）。"""
 
 
-def dir_size(path: str, budget: float = 30.0) -> int:
+def dir_size(path: str, budget: float = 15.0) -> int:
     """测量目录大小。budget 秒内没测完则抛 _MeasureTimeout，避免扫描卡死。"""
     t0 = time.monotonic()
     total = 0

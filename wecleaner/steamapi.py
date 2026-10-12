@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import subprocess
 from ctypes import c_bool, c_int, c_uint, c_uint64, c_void_p, POINTER
 from pathlib import Path
 
@@ -32,6 +33,7 @@ _REQUIRED_EXPORTS = (
 
 _DLL = None
 _UGC: int | None = None
+last_error = ""  # 最近一次 connect 失败的原因（给界面提示用）
 
 
 def find_dlls(libraries: list[str] | None = None) -> list[str]:
@@ -54,17 +56,23 @@ def find_dlls(libraries: list[str] | None = None) -> list[str]:
 
 def connect(libraries: list[str] | None = None) -> bool:
     """连接运行中的 Steam。成功后可调用本模块其他函数；重复调用无害。"""
-    global _DLL, _UGC
+    global _DLL, _UGC, last_error
     if _UGC:
         return True
-    for dll_path in find_dlls(libraries):
+    candidates = find_dlls(libraries)
+    if not candidates:
+        last_error = "没有找到任何 Steam 游戏（需要至少一个已安装的 Steam 游戏提供接口组件）"
+        return False
+    for dll_path in candidates:
         if _try_connect(dll_path):
             return True
+    if not last_error:
+        last_error = "Steam 客户端接口连接失败：请确认 Steam 正在运行且已完成登录，然后重新扫描"
     return False
 
 
 def _try_connect(dll_path: str) -> bool:
-    global _DLL, _UGC
+    global _DLL, _UGC, last_error
     dll_dir = Path(dll_path).parent
     marker = dll_dir / "steam_appid.txt"
     try:  # SteamAPI 初始化时会读 CWD / dll 目录下的 steam_appid.txt
@@ -83,6 +91,20 @@ def _try_connect(dll_path: str) -> bool:
         dll.SteamAPI_InitSafe.restype = c_bool
         dll.SteamAPI_InitSafe.argtypes = []
         if not dll.SteamAPI_InitSafe():
+            steam_on = False
+            try:
+                out = subprocess.run(
+                    ["tasklist", "/FI", "IMAGENAME eq steam.exe"],
+                    capture_output=True, text=True, timeout=10,
+                ).stdout.lower()
+                steam_on = "steam.exe" in out
+            except Exception:  # noqa: BLE001
+                steam_on = True
+            last_error = (
+                "Steam 正在运行但接口连接失败——常见原因是 Steam 以管理员权限启动。"
+                "请完全退出 Steam 后重新打开（普通权限），再回来重新扫描"
+                if steam_on else "Steam 未运行，请先启动 Steam 并登录"
+            )
             return False
         accessor = None
         for name in _UGC_VERSIONS:
@@ -91,12 +113,14 @@ def _try_connect(dll_path: str) -> bool:
                 break
         if accessor is None:
             dll.SteamAPI_Shutdown()
+            last_error = "接口组件版本过旧（缺少 SteamUGC 访问器）"
             return False
         accessor.restype = c_void_p
         accessor.argtypes = []
         ugc = accessor()
         if not ugc:
             dll.SteamAPI_Shutdown()
+            last_error = "SteamUGC 接口获取失败"
             return False
         _DLL, _UGC = dll, ugc
         return True
