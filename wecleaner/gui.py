@@ -69,7 +69,7 @@ class App:
         self._card_rects: list[tuple] = []
         self._thumb_cache: dict[str, Image.Image] = {}
         self._thumb_gen = 0
-        self._sort_mode = "大小"
+        self._sort_mode = "订阅顺序"  # 与 Steam/WE 列表一致（新订阅在前）
         self._status_filter = "全部"
         self._filter_text = ""
         self.busy = False
@@ -81,6 +81,7 @@ class App:
         self._build()
         self.root.bind("<Configure>", self._on_resize)
         self.root.after(120, self._poll)
+        self.root.after(5000, self._sync_tick)
         self.start_scan()
 
     # ---------- 界面 ----------
@@ -96,9 +97,11 @@ class App:
         self.btn_scan = ctk.CTkButton(header, text="↻ 重新扫描", width=104, command=self.start_scan)
         self.btn_scan.pack(side="left")
         self.sort_menu = ctk.CTkOptionMenu(
-            header, width=148, values=["按大小", "按时间（新→旧）", "按时间（旧→新）"],
+            header, width=170,
+            values=["按订阅顺序", "按大小", "按时间（新→旧）", "按时间（旧→新）"],
             command=self._change_sort,
         )
+        self.sort_menu.set("按订阅顺序")
         self.sort_menu.pack(side="left", padx=8)
         self.seg_status = ctk.CTkSegmentedButton(
             header, values=["全部", "订阅中", "未订阅"], command=self._change_status,
@@ -180,11 +183,61 @@ class App:
     # ---------- 数据视图 ----------
 
     def _sorted_items(self) -> list[core.Item]:
+        if self._sort_mode == "订阅顺序":
+            return sorted(
+                self.items,
+                key=lambda i: (i.sub_index if i.sub_index >= 0 else 10**9, -max(i.size, 0)),
+            )
         if self._sort_mode == "时间（新→旧）":
             return sorted(self.items, key=lambda i: (i.time_updated, max(i.size, 0)), reverse=True)
         if self._sort_mode == "时间（旧→新）":
             return sorted(self.items, key=lambda i: (i.time_updated, max(i.size, 0)))
         return sorted(self.items, key=lambda i: max(i.size, 0), reverse=True)
+
+    def _sync_tick(self) -> None:
+        """每 5 秒与 Steam 同步订阅状态：WE/Steam 里的增减自动反映，不重扫磁盘。"""
+        self.root.after(5000, self._sync_tick)
+        if self.busy or not self.items:
+            return
+        if not steamapi._UGC:
+            try:
+                steamapi.connect()
+            except Exception:  # noqa: BLE001
+                pass
+            if not steamapi._UGC:
+                return
+        try:
+            order = steamapi.get_subscribed_ordered()
+        except Exception:  # noqa: BLE001
+            return
+        subs = set(order)
+        idx = {w: i for i, w in enumerate(order)}
+        changed = 0
+        for it in self.items:
+            was = it.subscribed
+            it.subscribed = it.wid in subs
+            it.sub_index = idx.get(it.wid, -1)
+            if was != it.subscribed:
+                changed += 1
+        waiting = sum(1 for w in subs if w not in self._seen)  # 刚订阅、文件还没下好
+        # 之前因订阅信息缺失被锁死 → 现在 API 确认了，自动解锁
+        if self.res is not None and self.res.deletion_blocked:
+            self.res.deletion_blocked = False
+            self.res.subscribed = subs
+            self.res.subscribed_source = "steam_api"
+            self._busy_off()
+            self.lbl_warn.configure(text="已通过 Steam 接口确认订阅状态，操作已解锁", text_color=WARN)
+        if changed or waiting:
+            self._render_page()
+            self._update_stats()
+            tips = []
+            if changed:
+                tips.append(f"{changed} 个订阅状态变化")
+            if waiting:
+                tips.append(f"{waiting} 个新订阅下载中")
+            self.lbl_status.configure(
+                text="已同步 Steam：" + "，".join(tips) + "（点「重新扫描」查看新到货的壁纸）"
+            )
 
     def _refresh_visible(self) -> None:
         ft = self._filter_text.lower()
@@ -309,7 +362,10 @@ class App:
             d.text((x0 + 12, ty2), title, font=f_title, fill=TEXT)
             size_txt = "⏳ 变化中" if item.size < 0 else core.fmt_size(item.size)
             date = time.strftime("%y-%m-%d", time.localtime(item.time_updated)) if item.time_updated else "下载中"
-            d.text((x0 + 12, ty2 + 26), f"{size_txt} · {date}", font=f_meta, fill=SUB)
+            meta_txt = f"{size_txt} · {date}"
+            if item.subscribed and item.sub_index >= 0:
+                meta_txt = f"#{item.sub_index + 1} · {meta_txt}"  # 与 Steam/WE 订阅列表序号一致
+            d.text((x0 + 12, ty2 + 26), meta_txt, font=f_meta, fill=SUB)
 
             d.text((x0 + 12, y1 - 30), "订阅中" if item.subscribed else "未订阅",
                    font=f_meta, fill="#4f8cff" if item.subscribed else "#7b8291")
@@ -415,20 +471,20 @@ class App:
 
     def _scan_worker(self) -> None:
         try:
-            override = None
+            order = None
             try:
                 if steamapi.connect():
-                    override = steamapi.get_subscribed()
+                    order = steamapi.get_subscribed_ordered()  # 保留顺序 ≈ 订阅时间序
                     self._connect_error = ""
                 else:
                     self._connect_error = steamapi.last_error
             except Exception as e:  # noqa: BLE001
-                override = None
+                order = None
                 self._connect_error = str(e)
             res = core.scan(
                 self.appid,
                 on_progress=lambda done, total, item: self.q.put(("scan_prog", done, total, item)),
-                subscribed_override=override,
+                subscribed_order=order,
             )
         except Exception as e:  # noqa: BLE001
             self.q.put(("scan_error", str(e)))

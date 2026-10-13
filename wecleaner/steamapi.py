@@ -130,20 +130,25 @@ def _try_connect(dll_path: str) -> bool:
         os.chdir(prev)
 
 
-def get_subscribed() -> set[str]:
-    """返回当前账号对 Wallpaper Engine 的全部订阅 ID。"""
+def get_subscribed_ordered() -> list[str]:
+    """订阅列表，保持 Steam 客户端返回的原始顺序（≈ 订阅时间倒序，与 WE 界面一致）。"""
     if not _UGC:
         raise RuntimeError("尚未连接 Steam（先调用 connect）")
     _DLL.SteamAPI_ISteamUGC_GetNumSubscribedItems.restype = c_uint
     _DLL.SteamAPI_ISteamUGC_GetNumSubscribedItems.argtypes = [c_void_p]
     n = _DLL.SteamAPI_ISteamUGC_GetNumSubscribedItems(_UGC)
     if not n:
-        return set()
+        return []
     arr = (c_uint64 * n)()
     _DLL.SteamAPI_ISteamUGC_GetSubscribedItems.restype = c_int
     _DLL.SteamAPI_ISteamUGC_GetSubscribedItems.argtypes = [c_void_p, POINTER(c_uint64), c_int]
     got = _DLL.SteamAPI_ISteamUGC_GetSubscribedItems(_UGC, arr, n)
-    return {str(arr[i]) for i in range(got)}
+    return [str(arr[i]) for i in range(got)]
+
+
+def get_subscribed() -> set[str]:
+    """返回当前账号对 Wallpaper Engine 的全部订阅 ID（无序）。"""
+    return set(get_subscribed_ordered())
 
 
 def unsubscribe(wid: str) -> bool:

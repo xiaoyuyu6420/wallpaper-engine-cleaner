@@ -134,6 +134,7 @@ class Item:
     subscribed: bool = False
     time_updated: int = 0  # 本地安装/更新时间（unix 秒），0 = 未知（下载中）
     title: str = ""  # 来自 project.json，离线可读
+    sub_index: int = -1  # 订阅顺序（0 = 最新订阅；与 Steam/WE 列表一致），-1 = 未订阅
 
     @property
     def url(self) -> str:
@@ -265,11 +266,14 @@ def scan(
     on_progress=None,
     workers: int = 8,
     subscribed_override: set[str] | None = None,
+    subscribed_order: list[str] | None = None,
 ) -> ScanResult:
     """扫描所有 Steam 库，返回工坊内容列表（默认按占用降序）。
 
-    subscribed_override：来自运行中 Steam 客户端的权威订阅列表（steamapi 模块）。
-    提供时优先于本地 ACF 记录。on_progress / on_item 在每测完一个文件夹时回调。
+    subscribed_override：来自运行中 Steam 客户端的权威订阅集合。
+    subscribed_order：同一来源的有序列表（≈ 订阅时间倒序，与 WE 界面一致），
+    用于给每个条目计算 sub_index 以支持"按订阅顺序"排序。
+    on_progress / on_item 在每测完一个文件夹时回调。
     """
     res = ScanResult(appid=appid, app_name=APP_NAMES.get(appid, f"App {appid}"))
     res.libraries = find_steam_libraries()
@@ -306,11 +310,15 @@ def scan(
                         pass
 
     # 订阅真值：运行中的 Steam 客户端 > 本地 ACF
-    if subscribed_override is not None:
+    if subscribed_order is not None:
+        res.subscribed = set(subscribed_order)
+        res.subscribed_source = "steam_api"
+    elif subscribed_override is not None:
         res.subscribed = set(subscribed_override)
         res.subscribed_source = "steam_api"
     elif res.subscribed:
         res.subscribed_source = "acf"
+    sub_idx = {w: i for i, w in enumerate(subscribed_order or [])}
 
     # 订阅真值不可信时，禁止一切删除——宁可扫不出来，不可误删。
     # 教训：Wallpaper Engine 的 ACF 可能长期没有 WorkshopItemsSubscribed 键
@@ -348,6 +356,7 @@ def scan(
                     subscribed=wid in res.subscribed,
                     time_updated=res.time_updated.get(wid, 0),
                     title=title or wid,
+                    sub_index=sub_idx.get(wid, -1),
                 )
             )
 
