@@ -5,3 +5,5 @@ build/
 dist/
 *.spec
 docs/demo/
+webui/rhine-demo/_shot*.png
+webui/rhine-demo/_compare.png
