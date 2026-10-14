@@ -169,6 +169,7 @@ function runPendingDialog() {
 }
 
 function applySyncDone(m) {
+  const lockChanged = state.blocked !== !!m.blocked || state.canUnlock !== !!m.canUnlock;
   state.blocked = !!m.blocked; state.canUnlock = !!m.canUnlock;
   if (!m.connected) { syncAll(); return; }           // 连不上只更新锁定状态，不动列表
   for (const c of m.changed) {
@@ -176,10 +177,17 @@ function applySyncDone(m) {
     if (it) { it.subscribed = c.subscribed; it.subIndex = c.subIndex; }
   }
   state.pending = m.pending || 0;
+  if (m.count != null) {
+    state.stats = { count: m.count, subscribed: m.subscribed, unsubscribed: m.unsubscribed, totalSizeText: m.totalSizeText };
+  }
   if (m.autoUnlocked) toast("已自动解锁", "Steam 接口确认了订阅状态");
   else if (m.changedCount) toast("订阅已同步", `${m.changedCount} 个状态变化`);
-  refocusAfterDataChange();
-  syncAll();
+  // 无实质变化（每 5 秒的常规同步）不重建界面，避免网格每 5 秒闪一次
+  const material = m.changedCount || m.autoUnlocked || lockChanged;
+  if (material) {
+    refocusAfterDataChange();
+    syncAll();
+  }
 }
 
 function applyUnsubDone(m) {
@@ -305,6 +313,7 @@ function placeholderCanvas(wid) {
   g.fillStyle = "rgba(0,0,0,.3)"; g.fillRect(14, 80, 100, 6);
   g.fillStyle = "rgba(240,238,232,.8)"; g.font = "600 16px monospace";
   g.fillText(String(wid).slice(-4), 14, 62);
+  if (placeholderCache.size > 900) placeholderCache.clear();   // 上限，防止长会话内存堆积
   placeholderCache.set(wid, c);
   return c;
 }
@@ -320,8 +329,9 @@ async function fetchThumbs(wids) {
   dirty = true;
   // 分批拉取：每批 20 张，逐批刷新，边拉边显示，不阻塞界面
   for (let i = 0; i < need.length; i += 20) {
+    const batch = need.slice(i, i + 20);
     try {
-      const r = await API().get_thumbs(need.slice(i, i + 20));
+      const r = await API().get_thumbs(batch);
       for (const [wid, data] of Object.entries(r.thumbs || {})) {
         if (!data) continue;                                        // 空串 = 占位图
         const im = new Image();
@@ -331,7 +341,10 @@ async function fetchThumbs(wids) {
       }
       dirty = true;
       refreshGridCovers();
-    } catch (e) { /* 单批失败不影响其余批次 */ }
+    } catch (e) {
+      // 该批失败：移除占位以便下次重试（否则这批封面会永远停在灰占位）
+      for (const w of batch) state.thumbs.delete(w);
+    }
   }
 }
 
@@ -535,7 +548,8 @@ function hitTest(px, py) {
   const { rows } = shelfPlan();
   for (let pos = 0; pos < SHELF_ROWS; pos++) {
     const p = rows[pos]; if (!p) continue;
-    for (let s = p.count - 1; s >= 0; s--) {
+    // 绘制层序：slot 0 的 close 最大、最后绘制、在最上层 —— 命中检测必须从最上层开始
+    for (let s = 0; s < p.count; s++) {
       const lift = state.lifts.get(pos + ":" + s) ?? 0;
       const [sx, sy] = toScreen(-pos * ROWP, s * PITCH, LIFT_OUT * lift * .3);
       const ox = sx - CASE.origin[0] * K, oy = sy - CASE.origin[1] * K;
@@ -597,9 +611,11 @@ function toggleBatch(wid) {
   syncAll();
 }
 function refocusAfterDataChange() {
-  if (state.focus && state.byWid.has(state.focus)) return;
   const vis = visibleItems();
-  state.focus = vis.length ? vis[0].wid : (state.items[0] ? state.items[0].wid : null);
+  const visIds = new Set(vis.map(i => i.wid));
+  if (state.focus && visIds.has(state.focus)) return;   // 仍可见：保持不变
+  state.focus = vis.length ? vis[0].wid : null;          // 被过滤/移除：重选第一个可见项或清空
+  if (!state.focus) return;
   // 把 focus 定位到架子上
   const gs = groups();
   outer: for (let gi = 0; gi < gs.length; gi++) {
@@ -899,7 +915,7 @@ function syncButtons() {
   const off = state.busy || state.blocked;
   $("btn-rescan").disabled = state.busy;
   $("btn-all").disabled = state.busy || state.blocked;
-  $("btn-none").disabled = state.busy || !state.batch.size;
+  $("btn-none").disabled = state.busy || state.blocked || !state.batch.size;
   $("btn-unsub").disabled = off || !hasSub;
   $("btn-unsub-clean").disabled = off || !hasSub;
   $("btn-del").disabled = off || !hasUnsub;
@@ -909,8 +925,8 @@ function syncButtons() {
   bar.hidden = !state.blocked;
   document.documentElement.style.setProperty("--unlock", state.blocked ? "44px" : "0px");
   if (state.blocked) $("unlock-text").textContent = "⚠ 订阅状态无法确认（" + (state.warnings[0] || "本地订阅记录缺少关键字段") + "）";
-  // 顶部警告（非 blocked 的一般警告并入状态条右侧）
-  const warnText = (!state.blocked && state.warnings.length) ? " · ⚠ " + state.warnings[0] : "";
+  // 顶部警告（非 blocked 的一般警告并入状态条右侧，全部列出）
+  const warnText = (!state.blocked && state.warnings.length) ? " · ⚠ " + state.warnings.join(" · ") : "";
   syncStatusRight(warnText);
 }
 function defaultStatus() {
@@ -1123,22 +1139,15 @@ $("grid-wrap").addEventListener("click", e => {
   const card = e.target.closest(".gcard");
   if (!card) return;
   const wid = card.dataset.wid;
-  if (e.target.closest(".gc-mark")) { toggleBatch(wid); renderGrid(); return; }
+  if (e.target.closest(".gc-mark")) { toggleBatch(wid); return; }   // toggleBatch 内部 syncAll 已刷新
   if (e.target.closest(".gc-play")) { previewWid(wid); return; }
   state.focus = wid;
   syncAll();
-  renderGrid();
 });
-for (const b of document.querySelectorAll('[data-key="layout"]')) {
-  b.addEventListener("click", () => {
-    state.layout = b.dataset.val;
-    gridPage = 0;
-    markTools();
-    syncAll();
-    applyLayout();
-    updateURL();
-  });
-}
+$("grid-wrap").addEventListener("dblclick", e => {
+  const card = e.target.closest(".gcard");
+  if (card) API().open_url(card.dataset.wid);                       // 与货架双击一致：打开工坊页
+});
 
 /* =====================================================================================
    14 · 路由 + 顶栏 + 控件接线
@@ -1192,23 +1201,29 @@ function initControls() {
       const k = b.dataset.key, v = b.dataset.val;
       if (state[k] === v) return;
       state[k] = v;
+      if (k === "layout") gridPage = 0;               // 布局/筛选/排序切换都回到第 1 页
       state.gi = 0; state.sel = { row: 0, slot: 0 };
       state.lifts.clear();
       refocusAfterDataChange();
-      markTools(); syncAll(); updateURL();
+      markTools(); syncAll(); applyLayout(); updateURL();
     });
   for (const b of document.querySelectorAll("[data-key='mode']"))
     b.addEventListener("click", () => { applyTheme(state.scheme, b.dataset.val); markTools(); syncAll(); if (state.view === "style") syncStyle(); updateURL(); });
 
-  $("btn-rescan").addEventListener("click", () => {
-    const r = API().scan();
-    if (r && r.error) toast("无法扫描", r.message || r.error, "err");
+  $("btn-rescan").addEventListener("click", async () => {
+    try {
+      const r = await API().scan();
+      if (r && r.error) toast("无法扫描", r.message || r.error, "err");
+    } catch (e) {
+      toast("无法扫描", String(e), "err");
+    }
   });
 
   const search = $("search");
   search.addEventListener("input", () => {
     state.filter = search.value;
     $("search-wrap").classList.toggle("is-hit", !!state.filter.trim());
+    gridPage = 0;
     state.gi = 0; state.sel = { row: 0, slot: 0 };
     state.lifts.clear();
     refocusAfterDataChange();
@@ -1269,8 +1284,15 @@ function initControls() {
     doDelete(wids, skipped ? `\n（另有 ${skipped} 个订阅中项目已跳过）` : "");
   });
   $("chk-perm").addEventListener("change", async e => {
-    state.permanent = e.target.checked;
-    try { await API().set_permanent(state.permanent); } catch (err) { /* 忽略 */ }
+    const val = e.target.checked;
+    try {
+      const r = await API().set_permanent(val);
+      if (r && r.error) throw new Error(r.message || r.error);
+      state.permanent = val;
+    } catch (err) {
+      e.target.checked = !val;                 // 后端没切换成功：回滚复选框并提示
+      toast("设置失败", "无法切换「彻底删除」：" + err, "err");
+    }
     syncCleanup();
   });
 
@@ -1373,6 +1395,7 @@ async function boot() {
     state.permanent = !!st.permanent; state.warnings = st.warnings || [];
     $("chk-perm").checked = state.permanent;
     state.stats = { count: st.count, subscribed: st.subscribed, unsubscribed: st.unsubscribed, totalSizeText: st.totalSizeText };
+    state.busy = !!st.busy;              // F5 落在长任务中途：按后端真实状态禁用按钮
   } catch (e) {
     toast("连接失败", "无法读取后端状态：" + e, "err");
   }
@@ -1387,10 +1410,15 @@ async function boot() {
 
   syncAll();
   try {
-    const r = API().scan();                            // 启动即扫一次
+    const r = await API().scan();                      // 启动即扫一次（Promise：要 await 才能拿到返回值）
     if (r && r.error) toast("无法扫描", r.message || r.error, "err");
-  } catch (e) { /* mock/异常不影响界面 */ }
-  setInterval(() => { if (!state.busy) { try { API().sync(); } catch (e) { /* 忽略 */ } } }, 5000);
+  } catch (e) { /* 异常不影响界面 */ }
+  setInterval(() => {
+    if (state.busy) return;
+    Promise.resolve(API().sync()).then(r => {
+      if (r && r.error) setStatus("订阅同步失败：" + (r.message || r.error), 0);
+    }).catch(() => { /* 桥暂时不可用：下轮再试 */ });
+  }, 5000);
 
   // 演示确认弹窗：记录参数，扫描完成后由 runPendingDialog() 弹出（只弹窗不执行）
   const dlg = qs.get("dialog");
@@ -1410,6 +1438,7 @@ async function tryBoot() {
   if (__booted || !(window.pywebview && window.pywebview.api)) return;
   try { await __withTimeout(window.pywebview.api.get_state(), 1500); }
   catch (e) { return; }                       // 未就绪：下轮再试
+  if (__booted) return;                       // await 期间可能已被其它触发源启动
   __booted = true;
   boot();
 }

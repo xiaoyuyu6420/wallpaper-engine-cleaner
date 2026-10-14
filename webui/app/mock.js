@@ -288,6 +288,7 @@
       return;                                  // 真桥已注入：本文件不介入
     }
     window.pywebview = { api };
+    document.body.dataset.mock = "1";           // 诊断标记：一眼看出当前跑的是演示数据
     // 真实 pywebview 是异步注入后触发 pywebviewready；这里模拟同样的时序
     window.dispatchEvent(new Event("pywebviewready"));
   }
