@@ -13,6 +13,12 @@
 <div id="grain"></div>
 <div id="vignette"></div>
 
+<!-- ============ 平铺网格（快速浏览与选择） ============ -->
+<div id="grid-wrap">
+  <div id="grid-body"></div>
+  <div id="grid-pager"></div>
+</div>
+
 <!-- ============ 顶栏 ============ -->
 <header id="hud">
   <div class="brand">
@@ -61,6 +67,10 @@
     <div class="toolgroup" data-group="sort">
       <span class="tool-label">排序</span>
       <button class="tool" data-key="sort" data-val="sub">订阅顺序</button><button class="tool" data-key="sort" data-val="size">大小</button><button class="tool" data-key="sort" data-val="time">时间（新→旧）</button>
+    </div>
+    <div class="toolgroup" data-group="layout">
+      <span class="tool-label">布局</span>
+      <button class="tool" data-key="layout" data-val="array">货架</button><button class="tool" data-key="layout" data-val="grid">平铺</button>
     </div>
     <div class="toolgroup">
       <button class="tool" id="btn-rescan" title="重新扫描磁盘与 Steam 订阅">↻&nbsp;重新扫描</button>

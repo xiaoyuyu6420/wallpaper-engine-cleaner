@@ -7,8 +7,7 @@
 
 (function () {
   const qs = new URLSearchParams(location.search);
-  const hasReal = typeof window.pywebview !== "undefined" && window.pywebview && window.pywebview.api;
-  if (hasReal && qs.get("mock") !== "1") return;          // 真环境：完全不介入
+  const forceMock = qs.get("mock") === "1";   // 无头截图 / force 演示；真环境靠安装时的二次检查判断
 
   /* ---------- 12 条中性示例壁纸（演示名，非真实标题） ---------- */
   const DEMO = [
@@ -283,8 +282,15 @@
     };
   }
 
-  /* ---------- 安装 ---------- */
-  window.pywebview = { api };
-  // 真实 pywebview 是异步注入后触发 pywebviewready；这里模拟同样的时序
-  window.addEventListener("DOMContentLoaded", () => setTimeout(() => window.dispatchEvent(new Event("pywebviewready")), 80));
+  /* ---------- 安装（延迟 + 二次检查，绝不抢真桥） ---------- */
+  function install() {
+    if (!forceMock && typeof window.pywebview !== "undefined" && window.pywebview && window.pywebview.api) {
+      return;                                  // 真桥已注入：本文件不介入
+    }
+    window.pywebview = { api };
+    // 真实 pywebview 是异步注入后触发 pywebviewready；这里模拟同样的时序
+    window.dispatchEvent(new Event("pywebviewready"));
+  }
+  // 真桥在页面加载后很快注入；稍等再决定，避免抢跑
+  window.addEventListener("DOMContentLoaded", () => setTimeout(install, forceMock ? 0 : 800));
 })();

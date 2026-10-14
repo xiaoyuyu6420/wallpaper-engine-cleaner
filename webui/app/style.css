@@ -243,6 +243,52 @@ body[data-view="style"]   #view-style { display: block; }
 .gh-name { color: var(--fg); }
 .gh-dot { color: var(--line-faint); }
 
+/* ================= 平铺网格布局（快速浏览与选择） ================= */
+#grid-wrap {
+  position: absolute; inset: 0; display: none;
+  overflow-y: auto;
+  padding: calc(var(--header) + 40px) calc(var(--panel-width) + var(--gutter) + 24px) 150px var(--gutter);
+}
+#grid-body {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+.gcard {
+  position: relative; background: var(--case); border: 1px solid var(--line-faint);
+  border-radius: 10px; padding: 8px; cursor: pointer; user-select: none;
+}
+.gcard:hover { border-color: var(--fg-soft); }
+.gcard.is-focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.gcard.is-marked { border-color: var(--accent); border-width: 3px; padding: 6px; }
+.gcard img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: var(--well); border-radius: 4px; }
+.gc-title { margin-top: 8px; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--fg); }
+.gc-meta { margin-top: 3px; font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gc-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; }
+.gc-state { font-size: 11px; color: var(--mark); }
+.gc-state.on { color: var(--accent); }
+.gc-play {
+  background: none; border: 1px solid var(--line-faint); border-radius: 6px;
+  color: var(--fg-soft); font: inherit; font-size: 10.5px; letter-spacing: .06em;
+  padding: 2px 8px; cursor: pointer;
+}
+.gc-play:hover { border-color: var(--accent); color: var(--accent); }
+.gc-mark {
+  position: absolute; top: 12px; right: 12px; width: 22px; height: 22px; z-index: 2;
+  display: grid; place-items: center; background: rgba(var(--scrim-rgb), .78);
+  border: 1px solid var(--line-faint); border-radius: 999px; font-size: 13px; color: var(--fg-soft);
+}
+.gcard.is-marked .gc-mark { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.gc-mark:hover { border-color: var(--accent); color: var(--accent); }
+.gcard.is-marked .gc-mark:hover { color: var(--on-accent); }
+#grid-pager { display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 22px; color: var(--text-muted); }
+.gp {
+  background: none; border: 1px solid var(--hair); color: var(--fg-soft);
+  width: 38px; height: 30px; cursor: pointer; border-radius: 6px; font: inherit;
+}
+.gp:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.gp:disabled { opacity: .35; cursor: default; }
+.gp-num { font-size: 12px; letter-spacing: .12em; }
+
 /* ================= 02/03 表格视图公共三列 ================= */
 .view-table { display: none; grid-template-columns: var(--mgr-width) 1fr 360px; }
 body[data-view="cleanup"] #view-cleanup, body[data-view="history"] #view-history { display: grid; }

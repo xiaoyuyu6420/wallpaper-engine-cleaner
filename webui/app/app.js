@@ -66,6 +66,7 @@ const state = {
   skin: qs.get("skin") || "white",
   stateFilter: ["all","sub","unsub"].includes(qs.get("filter")) ? qs.get("filter") : "all",
   sort: ["sub","size","time"].includes(qs.get("sort")) ? qs.get("sort") : "sub",
+  layout: qs.get("layout") === "grid" ? "grid" : "array",
   filter: qs.get("q") || "",
   gi: 0,
   sel: { row: 0, slot: 0 },                          // 架子上的选中位置
@@ -313,20 +314,25 @@ function coverOf(wid) {
   return placeholderCanvas(wid);
 }
 async function fetchThumbs(wids) {
-  const need = wids.filter(w => w && !state.thumbs.has(w));
+  const need = [...new Set(wids)].filter(w => w && !state.thumbs.has(w));
   if (!need.length) return;
   for (const w of need) state.thumbs.set(w, placeholderCanvas(w));  // 先占位防止重复请求
-  try {
-    const r = await API().get_thumbs(need);
-    for (const [wid, data] of Object.entries(r.thumbs || {})) {
-      if (!data) continue;                                          // 空串 = 占位图
-      const im = new Image();
-      im.onload = () => { dirty = true; };
-      im.src = data;
-      state.thumbs.set(wid, im);
-    }
-    dirty = true;
-  } catch (e) { /* 缩略图失败不影响主流程 */ }
+  dirty = true;
+  // 分批拉取：每批 20 张，逐批刷新，边拉边显示，不阻塞界面
+  for (let i = 0; i < need.length; i += 20) {
+    try {
+      const r = await API().get_thumbs(need.slice(i, i + 20));
+      for (const [wid, data] of Object.entries(r.thumbs || {})) {
+        if (!data) continue;                                        // 空串 = 占位图
+        const im = new Image();
+        im.onload = () => { dirty = true; refreshGridCovers(); };
+        im.src = data;
+        state.thumbs.set(wid, im);
+      }
+      dirty = true;
+      refreshGridCovers();
+    } catch (e) { /* 单批失败不影响其余批次 */ }
+  }
 }
 
 /* =====================================================================================
@@ -647,10 +653,10 @@ function syncInfo() {
   $("shelf-prev").disabled = gi <= 0;
   $("shelf-go").disabled = gi >= gs.length - 1;
 
-  if (state.view === "archive" && state.focus) {
+  if (state.view === "archive" && state.focus && state.layout !== "grid") {
     const near = new Set();
     const { rows } = shelfPlan();
-    for (const p of rows.slice(0, 2)) {
+    for (const p of rows) {                 // 整个柜组的盒子都拉取（分批渐进填充）
       const g2 = groups()[p.gi];
       if (g2) for (const x of g2.items.slice(p.from, p.from + p.count)) near.add(x.wid);
     }
@@ -930,8 +936,11 @@ function syncAll() {
   syncCleanup();
   syncHistory();
   markTools();
-  $("gh-count").textContent = `${visibleItems().length} 个壁纸`;
-  $("gh-size").textContent = `共 ${state.stats.totalSizeText}`;
+  if (state.view === "archive" && state.layout === "grid") { renderGrid(); }
+  else {
+    $("gh-count").textContent = `${visibleItems().length} 个壁纸`;
+    $("gh-size").textContent = `共 ${state.stats.totalSizeText}`;
+  }
   if (state.view === "archive") setStatus(defaultStatus(), 0);
   dirty = true;
 }
@@ -1045,11 +1054,90 @@ async function doUnlock() {
 function handleFocusAction(act) {
   const it = focusItem();
   if (!it || state.busy) return;
-  if (act === "preview") { API().open_preview(it.wid); return; }
+  if (act === "preview") { previewWid(it.wid); return; }
   if (act === "open")    { API().open_url(it.wid); return; }
   if (act === "unsub")   { state.batch = new Set([it.wid]); doUnsubscribe(false); return; }
   if (act === "clean")   { if (!it.subscribed) doDelete([it.wid]); return; }
   if (act === "resub")   { doResubscribe([it.wid]); return; }
+}
+
+/* =====================================================================================
+   13.5 · 平铺网格布局（快速浏览与选择）
+   ===================================================================================== */
+let gridPage = 0;
+const GRID_PER = 32;
+
+function previewWid(wid) {
+  if (!wid) return;
+  API().open_preview(wid).then(r => {
+    if (r && r.error) setStatus(`预览失败：${r.message || r.error}`, 0);
+  }).catch(e => setStatus(`预览失败：${e}`, 0));
+}
+function refreshGridCovers() {
+  if (!(state.view === "archive" && state.layout === "grid")) return;
+  for (const img of document.querySelectorAll("#grid-body .gcard img[data-wid]")) {
+    const t = state.thumbs.get(img.dataset.wid);
+    const src = t && t.src ? t.src : (t && t.toDataURL ? t.toDataURL() : "");
+    if (src && img.src !== src) img.src = src;
+  }
+}
+function renderGrid() {
+  if (!(state.view === "archive" && state.layout === "grid")) return;
+  const items = visibleItems();
+  const pages = Math.max(1, Math.ceil(items.length / GRID_PER));
+  if (gridPage >= pages) gridPage = pages - 1;
+  if (gridPage < 0) gridPage = 0;
+  const chunk = items.slice(gridPage * GRID_PER, (gridPage + 1) * GRID_PER);
+  $("grid-body").innerHTML = chunk.map(it => {
+    const t = coverOf(it.wid);
+    const src = t && t.src ? t.src : (t && t.toDataURL ? t.toDataURL() : "");
+    const marked = state.batch.has(it.wid), foc = state.focus === it.wid;
+    return `<div class="gcard${marked ? " is-marked" : ""}${foc ? " is-focus" : ""}" data-wid="${esc(it.wid)}">
+      <div class="gc-mark" title="加入批量选择">${marked ? "✓" : "+"}</div>
+      <img data-wid="${esc(it.wid)}" src="${src}" alt="">
+      <div class="gc-title">${esc(it.title)}</div>
+      <div class="gc-meta">${esc(it.sizeText)} · ${esc(it.date)}${it.subscribed && it.subIndex >= 0 ? ` · #${it.subIndex + 1}` : ""}</div>
+      <div class="gc-foot"><span class="gc-state${it.subscribed ? " on" : ""}">${it.subscribed ? "订阅中" : "未订阅"}</span><button class="gc-play" data-act="play">▶&nbsp;预览</button></div>
+    </div>`;
+  }).join("");
+  $("grid-pager").innerHTML = pages > 1
+    ? `<button class="gp" data-go="prev"${gridPage <= 0 ? " disabled" : ""}>◀</button><span class="gp-num">${gridPage + 1} / ${pages}</span><button class="gp" data-go="next"${gridPage >= pages - 1 ? " disabled" : ""}>▶</button>`
+    : "";
+  $("gh-count").textContent = `${items.length}`;
+  $("gh-size").textContent = fmtSize(items.reduce((s, i) => s + Math.max(0, i.size), 0));
+  fetchThumbs(chunk.map(i => i.wid));
+}
+function applyLayout() {
+  const grid = state.view === "archive" && state.layout === "grid";
+  $("stage").style.display = grid ? "none" : "";
+  $("grid-wrap").style.display = grid ? "block" : "none";   // "block"：CSS 默认是 none，不能用 ""
+  const arr = state.view === "archive";
+  for (const id of ["select-numeral", "ruler", "shelf-switch"]) {
+    $(id).style.display = arr && !grid ? "" : "none";       // 货架部件仅在 ARRAY 模式显示
+  }
+  if (grid) renderGrid();
+}
+$("grid-wrap").addEventListener("click", e => {
+  const gp = e.target.closest(".gp");
+  if (gp) { gridPage += gp.dataset.go === "next" ? 1 : -1; renderGrid(); return; }
+  const card = e.target.closest(".gcard");
+  if (!card) return;
+  const wid = card.dataset.wid;
+  if (e.target.closest(".gc-mark")) { toggleBatch(wid); renderGrid(); return; }
+  if (e.target.closest(".gc-play")) { previewWid(wid); return; }
+  state.focus = wid;
+  syncAll();
+  renderGrid();
+});
+for (const b of document.querySelectorAll('[data-key="layout"]')) {
+  b.addEventListener("click", () => {
+    state.layout = b.dataset.val;
+    gridPage = 0;
+    markTools();
+    syncAll();
+    applyLayout();
+    updateURL();
+  });
 }
 
 /* =====================================================================================
@@ -1072,6 +1160,7 @@ function setView(v) {
   if (v === "history") refreshHistory();
   setStatus(defaultStatus(), 0);
   dirty = true;
+  applyLayout();
   updateURL();
 }
 function markTools() {
@@ -1088,6 +1177,7 @@ function updateURL() {
   if (state.skin !== "white") p.set("skin", state.skin);
   if (state.stateFilter !== "all") p.set("filter", state.stateFilter);
   if (state.sort !== "sub") p.set("sort", state.sort);
+  if (state.layout !== "array") p.set("layout", state.layout);
   if (state.filter.trim()) p.set("q", state.filter.trim());
   if (qs.get("mock")) p.set("mock", "1");
   const s = p.toString();
@@ -1307,5 +1397,22 @@ async function boot() {
   if (["unsub", "del", "unlock"].includes(dlg)) state.pendingDialog = dlg;
 }
 
-if (window.pywebview) boot();
-else window.addEventListener("pywebviewready", boot);
+/* 启动：兼容所有桥注入时序。pywebview 的 api 在管道未就绪时调用会挂起（不报错），
+   所以用「带超时的探针」判断就绪，未就绪就持续重试，就绪后才真正 boot。 */
+let __booted = false;
+function __withTimeout(p, ms) {
+  return Promise.race([
+    Promise.resolve(p),
+    new Promise((_, rej) => setTimeout(() => rej(new Error("bridge not ready")), ms)),
+  ]);
+}
+async function tryBoot() {
+  if (__booted || !(window.pywebview && window.pywebview.api)) return;
+  try { await __withTimeout(window.pywebview.api.get_state(), 1500); }
+  catch (e) { return; }                       // 未就绪：下轮再试
+  __booted = true;
+  boot();
+}
+if (window.pywebview) tryBoot();
+window.addEventListener("pywebviewready", tryBoot);
+const __bootPoll = setInterval(() => { tryBoot(); if (__booted) clearInterval(__bootPoll); }, 700);
