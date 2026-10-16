@@ -66,7 +66,7 @@ const state = {
   skin: qs.get("skin") || "white",
   stateFilter: ["all","sub","unsub"].includes(qs.get("filter")) ? qs.get("filter") : "all",
   sort: ["sub","size","time"].includes(qs.get("sort")) ? qs.get("sort") : "sub",
-  layout: qs.get("layout") === "grid" ? "grid" : "array",
+  layout: qs.get("layout") === "grid" ? "grid" : "array",   // 默认货架（等距档案架）
   filter: qs.get("q") || "",
   gi: 0,
   sel: { row: 0, slot: 0 },                          // 架子上的选中位置
