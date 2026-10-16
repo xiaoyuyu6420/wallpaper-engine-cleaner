@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
+<link rel="icon" type="image/png" href="assets/icon.png">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WE Cleaner · Wallpaper Archive</title>
 <link rel="stylesheet" href="style.css">
@@ -32,10 +33,9 @@
   </div>
 
   <nav id="nav">
-    <button class="nav-item" data-view="archive" title="01 档案 — 全部壁纸 (1)"><i>01</i><span>档案</span></button>
-    <button class="nav-item" data-view="cleanup" title="02 待清理 — 未订阅残留 (2)"><i>02</i><span>待清理</span></button>
-    <button class="nav-item" data-view="history" title="03 历史 — 可恢复订阅 (3)"><i>03</i><span>历史</span></button>
-    <button class="nav-item" data-view="style" title="04 外观 — 配色方案 (4)"><i>04</i><span>外观</span></button>
+    <button class="nav-item" data-view="archive" title="01 壁纸库 — 全部壁纸 (1)"><i>01</i><span>壁纸库</span></button>
+    <button class="nav-item" data-view="history" title="02 历史 — 可恢复订阅 (2)"><i>02</i><span>历史</span></button>
+    <button class="nav-item" data-view="style" title="03 外观 — 配色方案 (3)"><i>03</i><span>外观</span></button>
   </nav>
 
   <div class="hud-right">
@@ -109,12 +109,13 @@
       <button class="btn" id="btn-open">OPEN&nbsp;&nbsp;工坊页&nbsp;↗</button>
     </div>
     <div class="info-actions">
-      <button class="btn btn-warn" id="btn-unsub-one">退订选中</button>
-      <button class="btn btn-danger" id="btn-clean-one">清理未订阅残留</button>
+      <button class="btn btn-warn" id="btn-unsub-one" title="退订并删除本地文件（可在历史中恢复订阅）">⚡&nbsp;退订并清理</button>
+      <button class="btn" id="btn-unsub-keep" title="只退订，本地文件交给 Steam 处理">仅退订</button>
+      <button class="btn btn-danger" id="btn-clean-one">删除本地文件</button>
       <button class="btn" id="btn-resub-one">重新订阅（历史）</button>
     </div>
 
-    <div class="info-source" id="info-source">单击盒子选中 · 盒角标记或空格加入批量清理</div>
+    <div class="info-source" id="info-source">单击盒子选中 · 盒角标记或空格加入批量 · 底部「清理选中」一键处理</div>
   </aside>
 
   <div id="select-numeral">
@@ -142,51 +143,6 @@
 </section>
 
 <!-- ===================================================================== -->
-<!-- 02 待清理 CLEANUP —— 未订阅残留表格                                     -->
-<!-- ===================================================================== -->
-<section class="view view-table" id="view-cleanup">
-  <div class="side">
-    <div class="sec-head"><span class="sq"></span>清理概览&nbsp;·&nbsp;02</div>
-    <table class="kv">
-      <tr><td>未订阅残留</td><td id="cl-count">—</td></tr>
-      <tr><td>占用空间</td><td id="cl-size">—</td></tr>
-      <tr><td>已勾选</td><td id="cl-sel">—</td></tr>
-      <tr><td>删除方式</td><td id="cl-mode">回收站</td></tr>
-    </table>
-    <div class="logbox">
-      <div class="logbox-head"><span>清理说明</span><span id="cl-state">IDLE</span></div>
-      <div class="logrow"><span>来源</span><b>扫描出的未订阅壁纸目录</b><i class="dot is-on" id="cl-d1"></i></div>
-      <div class="logrow"><span>默认</span><b>移入回收站（可还原）</b><i class="dot"></i></div>
-      <div class="logrow"><span>勾选后</span><b>彻底删除则不进回收站</b><i class="dot"></i></div>
-      <div class="logrow"><span>订阅中</span><b>删除时自动跳过</b><i class="dot"></i></div>
-    </div>
-    <div class="side-actions">
-      <button class="btn" id="cl-all">全选残留</button>
-      <button class="btn" id="cl-none">全不选</button>
-    </div>
-  </div>
-
-  <div class="tmain">
-    <div class="t-rail"><span class="t-rail-num" id="cl-no">000</span></div>
-    <div class="t-inner">
-      <div class="t-head">
-        <div class="t-head-left">
-          <div class="t-cat"><span class="sq"></span>待清理&nbsp;NO.&nbsp;<span id="cl-no2">001</span></div>
-          <h2 class="t-title">未订阅残留</h2>
-        </div>
-        <div class="t-head-right">
-          <span class="t-meta" id="cl-meta">—</span>
-          <button class="chip chip-pl" id="cl-del">删除选中</button>
-        </div>
-      </div>
-      <div class="t-thead"><span class="c-no">NO</span><span class="c-check">☐</span><span class="c-title">标题</span><span class="c-id">ID</span><span class="c-size">大小</span><span class="c-date">安装</span><span class="c-sub">订阅</span></div>
-      <div class="t-rows" id="cl-rows"></div>
-    </div>
-  </div>
-
-  <aside class="prof" id="prof-cleanup"></aside>
-</section>
-
 <!-- ===================================================================== -->
 <!-- 03 历史 HISTORY —— 可恢复订阅                                          -->
 <!-- ===================================================================== -->
@@ -289,9 +245,8 @@
   <div class="tr-right">
     <button class="tr-chip" id="btn-all">全选</button>
     <button class="tr-chip" id="btn-none">全不选</button>
-    <button class="tr-chip tr-acc" id="btn-unsub">退订选中</button>
-    <button class="tr-chip tr-clean" id="btn-unsub-clean">⚡&nbsp;退订并清理</button>
-    <button class="tr-chip tr-danger" id="btn-del">删除选中</button>
+    <button class="tr-chip tr-clean" id="btn-clean-sel" title="订阅中的退订并删文件，未订阅的直接删文件">⚡&nbsp;清理选中</button>
+    <button class="tr-chip" id="btn-unsub-only" title="只退订不删文件">仅退订</button>
     <label class="tr-chip perm"><input type="checkbox" id="chk-perm"><span class="bx"></span>彻底删除</label>
   </div>
 </footer>

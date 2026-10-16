@@ -60,7 +60,7 @@ function rgba(hex, a) { const c = hexToRgb(hex); return `rgba(${c[0]},${c[1]},${
    ===================================================================================== */
 const qs = new URLSearchParams(location.search);
 const state = {
-  view: ["archive","cleanup","history","style"].includes(qs.get("view")) ? qs.get("view") : "archive",
+  view: ["archive","history","style"].includes(qs.get("view")) ? qs.get("view") : "archive",
   scheme: qs.get("scheme") || "archive",
   mode: qs.get("mode") === "light" ? "light" : "dark",
   skin: qs.get("skin") || "white",
@@ -75,6 +75,7 @@ const state = {
   // 领域数据（契约 §4）
   items: [], byWid: new Map(), thumbs: new Map(),    // thumbs: wid → Image/canvas
   batch: new Set(),                                  // 批量选择集（wid）
+  pendingCleanup: null,                              // 智能清理第二步：待删除的未订阅 wid 列表
   focus: null,                                       // 详情面板当前 wid
   history: [], hisSel: new Set(),
   blocked: false, canUnlock: false, busy: false, permanent: false,
@@ -190,14 +191,19 @@ function applySyncDone(m) {
   }
 }
 
-function applyUnsubDone(m) {
+async function applyUnsubDone(m) {
   applyPatches(m.patched);
   state.stats = { count: m.count, subscribed: m.subscribed, unsubscribed: m.unsubscribed, totalSizeText: m.totalSizeText };
+  // 智能清理第二步：订阅批退订完成后，接续删除未订阅批
+  if (state.pendingCleanup && state.pendingCleanup.length) {
+    const wids = state.pendingCleanup; state.pendingCleanup = null;
+    try { await API().delete(wids); } catch (e) { /* 下批同步重试 */ }
+  }
   if (m.error) { toast("退订失败", m.error, "err"); }
   else {
     let text = `已退订 ${m.ok} 个`;
     text += m.clean ? `，已清理 ${m.cleaned} 个（释放 ${m.freedText}）` : "，Steam 正在后台删除文件";
-    if (m.clean && m.cleanFails.length) text += `；${m.cleanFails.length} 个文件被占用，稍后可用「删除选中」清理`;
+    if (m.clean && m.cleanFails.length) text += `；${m.cleanFails.length} 个文件被占用，稍后可用「删除本地文件」清理`;
     if (m.fail) text += `；${m.fail} 个失败`;
     toast("退订完成", text, m.fail ? "warn" : "");
   }
@@ -654,6 +660,7 @@ function syncInfo() {
   $("btn-preview").disabled = !has;
   $("btn-open").disabled = !has;
   $("btn-unsub-one").disabled = !(has && it.subscribed && !state.blocked);
+  $("btn-unsub-keep").disabled = !(has && it.subscribed && !state.blocked);
   $("btn-clean-one").disabled = !(has && !it.subscribed && !state.blocked);
   $("btn-resub-one").disabled = !(has && state.history.some(h => h.wid === it.wid));
 
@@ -708,7 +715,7 @@ function renderProf(host) {
       <button class="btn" data-act="resub" ${inHis ? "" : "disabled"}>重新订阅（历史）</button>
     </div>`;
 }
-for (const id of ["prof-cleanup", "prof-history"]) {
+for (const id of ["prof-history"]) {
   $(id).addEventListener("click", e => {
     const b = e.target.closest("[data-act]");
     if (b && !b.disabled) handleFocusAction(b.dataset.act);
@@ -716,42 +723,8 @@ for (const id of ["prof-cleanup", "prof-history"]) {
 }
 
 /* =====================================================================================
-   9 · 表格视图：02 待清理 / 03 历史
+   9 · 表格视图：02 历史
    ===================================================================================== */
-function syncCleanup() {
-  const rows = state.items.filter(i => !i.subscribed);
-  const selRows = rows.filter(i => state.batch.has(i.wid));
-  const bytes = rows.reduce((a, i) => a + Math.max(i.size, 0), 0);
-  const selBytes = selRows.reduce((a, i) => a + Math.max(i.size, 0), 0);
-  $("cl-count").textContent = `${rows.length} 个`;
-  $("cl-size").textContent = fmtSize(bytes);
-  $("cl-sel").textContent = selRows.length ? `${selRows.length} 个 · ${fmtSize(selBytes)}` : "0";
-  $("cl-mode").textContent = state.permanent ? "彻底删除" : "回收站";
-  $("cl-no").textContent = String(rows.length).padStart(3, "0");
-  $("cl-no2").textContent = "001";
-  $("cl-meta").textContent = `共 ${rows.length} 个 · ${fmtSize(bytes)}`;
-  $("cl-state").textContent = state.blocked ? "LOCKED" : (rows.length ? "READY" : "CLEAN");
-  const box = $("cl-rows");
-  if (!rows.length) { box.innerHTML = `<div class="t-empty">很干净，没有未订阅残留 ✔</div>`; }
-  else {
-    box.replaceChildren(...rows.map((it, i) => {
-      const d = document.createElement("div");
-      d.className = "t-row" + (state.batch.has(it.wid) ? " is-sel" : "");
-      d.innerHTML = `<span class="c-no">${String(i + 1).padStart(2, "0")}</span>
-        <span class="c-check">${state.batch.has(it.wid) ? "☑" : "☐"}</span>
-        <span class="c-title">${esc(it.title)}</span>
-        <span class="c-id">${esc(it.wid)}</span>
-        <span class="c-size">${esc(it.sizeText)}</span>
-        <span class="c-date">${esc(it.date)}</span>
-        <span class="c-sub"><span class="tag-off">残留</span></span>`;
-      d.addEventListener("click", () => { state.focus = it.wid; toggleBatch(it.wid); });
-      return d;
-    }));
-  }
-  $("cl-del").disabled = state.busy || state.blocked || !selRows.length;
-  renderProf($("prof-cleanup"));
-}
-
 function syncHistory() {
   const rows = state.history;
   const selRows = rows.filter(r => state.hisSel.has(r.wid));
@@ -916,9 +889,8 @@ function syncButtons() {
   $("btn-rescan").disabled = state.busy;
   $("btn-all").disabled = state.busy || state.blocked;
   $("btn-none").disabled = state.busy || state.blocked || !state.batch.size;
-  $("btn-unsub").disabled = off || !hasSub;
-  $("btn-unsub-clean").disabled = off || !hasSub;
-  $("btn-del").disabled = off || !hasUnsub;
+  $("btn-clean-sel").disabled = off || !(hasSub || hasUnsub);
+  $("btn-unsub-only").disabled = off || !hasSub;
   $("chk-perm").disabled = state.busy;
   // 解锁条
   const bar = $("unlock-bar");
@@ -930,7 +902,6 @@ function syncButtons() {
   syncStatusRight(warnText);
 }
 function defaultStatus() {
-  if (state.view === "cleanup") { const n = state.items.filter(i => !i.subscribed).length; return n ? `待清理区 · ${n} 个未订阅残留` : "待清理区 · 没有残留"; }
   if (state.view === "history") return `历史区 · ${state.history.length} 条记录`;
   if (state.view === "style") return "外观区 · 配色方案";
   const f = state.filter.trim();
@@ -949,7 +920,6 @@ function syncStatusRight(extra) {
 function syncAll() {
   syncInfo();
   syncTransportBar();
-  syncCleanup();
   syncHistory();
   markTools();
   if (state.view === "archive" && state.layout === "grid") { renderGrid(); }
@@ -1007,6 +977,34 @@ function toast(head, body, kind = "") {
    13 · 操作（全部走 CONTRACT.md 的 api.*）
    ===================================================================================== */
 function batchItems() { return state.items.filter(i => state.batch.has(i.wid)); }
+
+/* 智能清理：订阅中的 → 退订并删文件；未订阅的 → 直接删文件。一个按钮通吃。 */
+function cleanSelected() {
+  const chosen = [...state.batch].map(w => state.byWid.get(w)).filter(Boolean);
+  if (!chosen.length || state.busy) return;
+  const sub = chosen.filter(i => i.subscribed);
+  const unsub = chosen.filter(i => !i.subscribed);
+  const total = chosen.reduce((a, i) => a + Math.max(i.size, 0), 0);
+  const lines = [];
+  if (sub.length) lines.push(`· ${sub.length} 个订阅中 → 退订，并删除本地文件`);
+  if (unsub.length) lines.push(`· ${unsub.length} 个未订阅残留 → 删除本地文件`);
+  confirmModal({
+    title: "清理选中",
+    body: `将处理 ${chosen.length} 个壁纸（共 ${fmtSize(total)}）：\n\n`
+      + `${lines.join("\n")}\n\n${previewList(chosen)}\n\n`
+      + `（退订/删除都有记录，可在「历史」一键恢复订阅）\n\n确定继续吗？`,
+  }).then(ok => {
+    if (!ok) return;
+    state.pendingCleanup = unsub.length ? unsub.map(i => i.wid) : [];
+    if (sub.length) {
+      API().unsubscribe(sub.map(i => i.wid), true);   // 完成事件里接续清理未订阅批
+    } else {
+      const wids = state.pendingCleanup; state.pendingCleanup = null;
+      API().delete(wids);
+    }
+    state.batch.clear();
+  }).catch(() => {});
+}
 
 async function doUnsubscribe(clean) {
   const chosen = batchItems().filter(i => i.subscribed);
@@ -1072,7 +1070,7 @@ function handleFocusAction(act) {
   if (!it || state.busy) return;
   if (act === "preview") { previewWid(it.wid); return; }
   if (act === "open")    { API().open_url(it.wid); return; }
-  if (act === "unsub")   { state.batch = new Set([it.wid]); doUnsubscribe(false); return; }
+  if (act === "unsub")   { state.batch = new Set([it.wid]); cleanSelected(); return; }
   if (act === "clean")   { if (!it.subscribed) doDelete([it.wid]); return; }
   if (act === "resub")   { doResubscribe([it.wid]); return; }
 }
@@ -1153,7 +1151,7 @@ $("grid-wrap").addEventListener("dblclick", e => {
    14 · 路由 + 顶栏 + 控件接线
    ===================================================================================== */
 function setView(v) {
-  if (!["archive","cleanup","history","style"].includes(v)) v = "archive";
+  if (!["archive","history","style"].includes(v)) v = "archive";
   state.view = v;
   document.body.dataset.view = v;
   for (const b of document.querySelectorAll(".nav-item")) b.classList.toggle("is-active", b.dataset.view === v);
@@ -1269,20 +1267,16 @@ function initControls() {
   // 详情面板按钮
   $("btn-preview").addEventListener("click", () => handleFocusAction("preview"));
   $("btn-open").addEventListener("click", () => handleFocusAction("open"));
-  $("btn-unsub-one").addEventListener("click", () => handleFocusAction("unsub"));
+  $("btn-unsub-one").addEventListener("click", () => { state.batch = new Set([focusItem().wid]); cleanSelected(); });
+  $("btn-unsub-keep").addEventListener("click", () => handleFocusAction("unsub"));
   $("btn-clean-one").addEventListener("click", () => handleFocusAction("clean"));
   $("btn-resub-one").addEventListener("click", () => handleFocusAction("resub"));
 
   // 批量操作条
   $("btn-all").addEventListener("click", () => { visibleItems().forEach(i => state.batch.add(i.wid)); syncAll(); });
   $("btn-none").addEventListener("click", () => { state.batch.clear(); syncAll(); });
-  $("btn-unsub").addEventListener("click", () => doUnsubscribe(false));
-  $("btn-unsub-clean").addEventListener("click", () => doUnsubscribe(true));
-  $("btn-del").addEventListener("click", () => {
-    const wids = batchItems().map(i => i.wid);
-    const skipped = batchItems().filter(i => i.subscribed).length;
-    doDelete(wids, skipped ? `\n（另有 ${skipped} 个订阅中项目已跳过）` : "");
-  });
+  $("btn-clean-sel").addEventListener("click", () => cleanSelected());
+  $("btn-unsub-only").addEventListener("click", () => doUnsubscribe(false));
   $("chk-perm").addEventListener("change", async e => {
     const val = e.target.checked;
     try {
@@ -1293,19 +1287,10 @@ function initControls() {
       e.target.checked = !val;                 // 后端没切换成功：回滚复选框并提示
       toast("设置失败", "无法切换「彻底删除」：" + err, "err");
     }
-    syncCleanup();
   });
 
   // 解锁条
   $("btn-unlock").addEventListener("click", doUnlock);
-
-  // cleanup 视图
-  $("cl-all").addEventListener("click", () => { state.items.filter(i => !i.subscribed).forEach(i => state.batch.add(i.wid)); syncAll(); });
-  $("cl-none").addEventListener("click", () => { state.batch.clear(); syncAll(); });
-  $("cl-del").addEventListener("click", () => {
-    const wids = state.items.filter(i => !i.subscribed && state.batch.has(i.wid)).map(i => i.wid);
-    doDelete(wids);
-  });
 
   // history 视图
   $("hi-all").addEventListener("click", () => { state.history.forEach(r => state.hisSel.add(r.wid)); syncHistory(); });
@@ -1347,7 +1332,7 @@ function onKey(e) {
   if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
   const k = e.key;
   if (k === "Escape") { const pop = $("menu-pop"); if (pop.classList.contains("is-open")) { pop.classList.remove("is-open"); return; } return; }
-  if (k === "1" || k === "2" || k === "3" || k === "4") { setView(["archive","cleanup","history","style"][Number(k) - 1]); return; }
+  if (k === "1" || k === "2" || k === "3") { setView(["archive","history","style"][Number(k) - 1]); return; }
   if (k === "d" || k === "D") { applyTheme(state.scheme, state.mode === "dark" ? "light" : "dark"); markTools(); syncAll(); if (state.view === "style") syncStyle(); updateURL(); return; }
   if (k === "/") { e.preventDefault(); $("search").focus(); return; }
   if (state.view !== "archive") return;
