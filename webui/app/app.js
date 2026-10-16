@@ -552,18 +552,27 @@ function drawSelectionPlate() {
 }
 function hitTest(px, py) {
   const { rows } = shelfPlan();
+  const zv = CASE.axes.z;                                     // [0, -75.21] 每世界单位
+  const depth = 0.55;                                          // 盒子顶面厚度（世界单位，目测校准）
   for (let pos = 0; pos < SHELF_ROWS; pos++) {
     const p = rows[pos]; if (!p) continue;
     // 绘制层序：slot 0 的 close 最大、最后绘制、在最上层 —— 命中检测必须从最上层开始
     for (let s = 0; s < p.count; s++) {
       const lift = state.lifts.get(pos + ":" + s) ?? 0;
-      const [sx, sy] = toScreen(-pos * ROWP, s * PITCH, LIFT_OUT * lift * .3);
+      const z = LIFT_OUT * lift * .3;
+      const [sx, sy] = toScreen(-pos * ROWP, s * PITCH, z);
       const ox = sx - CASE.origin[0] * K, oy = sy - CASE.origin[1] * K;
       if (inQuad(px, py, CASE.cover, ox, oy, K)) {
         // 右上角小三角 = 盒角标记区（加入 / 移出批量集）
         const q = CASE.cover.map(([x, y]) => [ox + x * K, oy + y * K]);
         const a = lerp2(q[1], q[0], .3), b = lerp2(q[1], q[2], .2);
         return { row: pos, slot: s, corner: inTri(px, py, q[1], a, b) };
+      }
+      // 盒子顶面（露出的上边缘）也归属该盒：cover 上边沿 -z 方向挤出顶面厚度
+      const topQuad = CASE.cover.slice(0, 2).map(([x, y]) => [ox + x * K + zv[0] * K * depth, oy + y * K + zv[1] * K * depth])
+        .concat(CASE.cover.slice(0, 2).map(([x, y]) => [ox + x * K, oy + y * K]).reverse());
+      if (inQuad(px, py, topQuad, 0, 0, 1)) {
+        return { row: pos, slot: s, corner: false };
       }
     }
   }
@@ -1106,12 +1115,17 @@ function renderGrid() {
     const t = coverOf(it.wid);
     const src = t && t.src ? t.src : (t && t.toDataURL ? t.toDataURL() : "");
     const marked = state.batch.has(it.wid), foc = state.focus === it.wid;
+    const status = it.subscribed ? "订阅中" : "未订阅";
     return `<div class="gcard${marked ? " is-marked" : ""}${foc ? " is-focus" : ""}" data-wid="${esc(it.wid)}">
-      <div class="gc-mark" title="加入批量选择">${marked ? "✓" : "+"}</div>
+      <div class="gc-mark" title="批量选择状态">${marked ? "✓" : ""}</div>
       <img data-wid="${esc(it.wid)}" src="${src}" alt="">
       <div class="gc-title">${esc(it.title)}</div>
-      <div class="gc-meta">${esc(it.sizeText)} · ${esc(it.date)}${it.subscribed && it.subIndex >= 0 ? ` · #${it.subIndex + 1}` : ""}</div>
-      <div class="gc-foot"><span class="gc-state${it.subscribed ? " on" : ""}">${it.subscribed ? "订阅中" : "未订阅"}</span><button class="gc-play" data-act="play">▶&nbsp;预览</button></div>
+      <div class="gc-meta">${esc(it.sizeText)} · ${esc(it.date || "下载中")}${it.subscribed && it.subIndex >= 0 ? ` · #${it.subIndex + 1}` : ""}</div>
+      <div class="gc-foot">
+        <span class="gc-state${it.subscribed ? " on" : ""}">${status}</span>
+        <button class="gc-info" data-act="info" title="查看详情">ℹ</button>
+        <button class="gc-play" data-act="play" title="预览本地视频">▶</button>
+      </div>
     </div>`;
   }).join("");
   $("grid-pager").innerHTML = pages > 1
@@ -1137,10 +1151,9 @@ $("grid-wrap").addEventListener("click", e => {
   const card = e.target.closest(".gcard");
   if (!card) return;
   const wid = card.dataset.wid;
-  if (e.target.closest(".gc-mark")) { toggleBatch(wid); return; }   // toggleBatch 内部 syncAll 已刷新
   if (e.target.closest(".gc-play")) { previewWid(wid); return; }
-  state.focus = wid;
-  syncAll();
+  if (e.target.closest(".gc-info")) { state.focus = wid; syncInfo(); markTools(); return; }
+  toggleBatch(wid);                                  // 整卡点击 = 切换批量选择（快速选择主场）
 });
 $("grid-wrap").addEventListener("dblclick", e => {
   const card = e.target.closest(".gcard");
