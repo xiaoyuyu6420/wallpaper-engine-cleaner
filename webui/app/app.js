@@ -56,7 +56,7 @@ function hexToRgb(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 2
 function rgba(hex, a) { const c = hexToRgb(hex); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
 
 /* =====================================================================================
-   2 · STATE + URL 参数（?view=archive|cleanup|history|style & mock=1 & …）
+   2 · STATE + URL 参数（?view=archive|history|style & mock=1 & …）
    ===================================================================================== */
 const qs = new URLSearchParams(location.search);
 const state = {
@@ -777,7 +777,7 @@ function syncHistory() {
 }
 
 /* =====================================================================================
-   10 · 04 外观（配色方案 + 盒子外壳 + 明暗）
+   10 · 03 外观（配色方案 + 盒子外壳 + 明暗）
    ===================================================================================== */
 const heroCanvas = $("st-hero");
 function renderStyle() {

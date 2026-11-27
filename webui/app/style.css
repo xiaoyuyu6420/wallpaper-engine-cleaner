@@ -42,7 +42,7 @@ html, body {
 }
 
 #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
-body[data-view="cleanup"] #stage, body[data-view="history"] #stage, body[data-view="style"] #stage { display: none; }
+body[data-view="history"] #stage, body[data-view="style"] #stage { display: none; }
 
 #grain {
   position: absolute; inset: 0; pointer-events: none; z-index: 3;
@@ -58,7 +58,7 @@ body[data-view="cleanup"] #stage, body[data-view="history"] #stage, body[data-vi
     linear-gradient(to left,  rgba(var(--scrim-rgb),.96) 0, rgba(var(--scrim-rgb),.55) 420px, rgba(var(--scrim-rgb),0) 780px),
     radial-gradient(130% 100% at 40% 80%, rgba(var(--scrim-rgb),0) 42%, rgba(var(--scrim-rgb),.72) 100%);
 }
-body[data-view="cleanup"] #vignette, body[data-view="history"] #vignette, body[data-view="style"] #vignette { display: none; }
+body[data-view="history"] #vignette, body[data-view="style"] #vignette { display: none; }
 
 button, input { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
 button:focus-visible, input:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
@@ -68,7 +68,6 @@ button:disabled:hover { border-color: var(--line-faint); color: var(--fg-soft); 
 /* ================= 视图容器 ================= */
 .view { display: none; }
 body[data-view="archive"] #view-archive,
-body[data-view="cleanup"] #view-cleanup,
 body[data-view="history"] #view-history,
 body[data-view="style"]   #view-style { display: block; }
 
@@ -290,9 +289,9 @@ body[data-view="style"]   #view-style { display: block; }
 .gp:disabled { opacity: .35; cursor: default; }
 .gp-num { font-size: 12px; letter-spacing: .12em; }
 
-/* ================= 02/03 表格视图公共三列 ================= */
+/* ================= 02 表格视图公共三列 ================= */
 .view-table { display: none; grid-template-columns: var(--mgr-width) 1fr 360px; }
-body[data-view="cleanup"] #view-cleanup, body[data-view="history"] #view-history { display: grid; }
+body[data-view="history"] #view-history { display: grid; }
 
 /* 左列 */
 .side { border-right: var(--hairline) solid var(--hair); padding: 18px 16px 20px; overflow-y: auto; display: flex; flex-direction: column; min-height: 0; }
@@ -372,7 +371,7 @@ body[data-view="cleanup"] #view-cleanup, body[data-view="history"] #view-history
 .prof-actions .btn { width: 100%; text-align: left; }
 .prof-empty { margin-top: 22px; font-size: 11px; line-height: 1.9; letter-spacing: .12em; color: var(--text-muted); }
 
-/* ================= 04 外观 ================= */
+/* ================= 03 外观 ================= */
 #view-style { display: none; }
 body[data-view="style"] #view-style { display: grid; grid-template-columns: 1fr 360px; }
 .st-top { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 18px var(--gutter) 14px; border-bottom: var(--hairline) solid var(--hair); }
