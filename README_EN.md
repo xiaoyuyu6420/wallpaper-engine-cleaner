@@ -53,7 +53,7 @@ WE Cleaner solves all four: a specimen-shelf library with exact sizes, batch uns
 
 ## Quick start
 
-1. Download `WECleanerNext.exe` from [Releases](https://github.com/xiaoyuyu6420/wallpaper-engine-cleaner/releases/latest) (portable, ~94 MB, front-end assets included)
+1. Download `WECleanerNext.exe` from [Releases](https://github.com/xiaoyuyu6420/wallpaper-engine-cleaner/releases/latest) (portable, ~82 MB, front-end assets included)
 2. Keep **Steam running**, double-click the exe
 3. Search / sort / filter to find unwanted wallpapers → select → **Clean selected**
 4. Made a mistake? Open **History** → select → **Resubscribe** — Steam downloads them back
