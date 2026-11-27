@@ -1,3 +1,0 @@
-Setting breakpad minidump AppID = 431960
-SteamInternal_SetMinidumpSteamID:  Caching Steam ID:  76561199177418361 [API loaded no]
-[1013/120019.676:ERROR:ui\gfx\win\window_impl.cc:172] Failed to unregister class Chrome_WidgetWin_0. Error = 1411

@@ -550,10 +550,10 @@ function drawSelectionPlate() {
   ctx.fillStyle = C.fg; ctx.fillRect(lx + 54, ly - 9, tw + 16, 18);
   ctx.fillStyle = C.bg; ctx.fillText(text, lx + 62, ly + 1);
 }
-function hitTest(px, py) {
+function hitTestCore(px, py) {
   const { rows } = shelfPlan();
   const zv = CASE.axes.z;                                     // [0, -75.21] 每世界单位
-  const depth = 0.55;                                          // 盒子顶面厚度（世界单位，目测校准）
+  const depth = 1.0;                                          // 盒子顶面厚度（世界单位，目测校准）
   for (let pos = 0; pos < SHELF_ROWS; pos++) {
     const p = rows[pos]; if (!p) continue;
     // 绘制层序：slot 0 的 close 最大、最后绘制、在最上层 —— 命中检测必须从最上层开始
@@ -577,7 +577,18 @@ function hitTest(px, py) {
     }
   }
   return null;
-}
+
+
+function hitTest(px, py) {
+  // 向上扫描补偿：两盒重叠带里，命中视觉上层的盒子（露出的上边缘）
+  const direct = hitTestCore(px, py);
+  if (direct) return direct;
+  for (let dy = 8; dy <= 130; dy += 8) {
+    const t = hitTestCore(px, py - dy);
+    if (t) return t;
+  }
+  return null;
+}}
 
 /* ---------- 上浮动画 + 重绘泵 ---------- */
 let anim = null;

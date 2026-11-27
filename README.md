@@ -17,6 +17,15 @@
 
 </div>
 
+## 界面
+
+RhinE「音频档案」风格的等距标本盒界面 —— 每张壁纸是一只标本盒，摆在自己的货架上：
+
+- **三个视图**：壁纸库 / 历史 / 外观（6 套配色 × 明暗）
+- **两种布局**：**货架**（等距 3D 标本架）与 **平铺**（网格卡片墙），工具条一键切换
+- **顺手的多选**：单击盒子选中，盒角标记或空格加入批量集；底部「⚡ 清理选中」一键处理
+- **实时对账**：订阅状态每 5 秒与 Steam 同步一次，外部退订/订阅会自动反映
+
 ## 解决什么问题
 
 Wallpaper Engine 的壁纸动辄几 GB，订阅几十张不知不觉就吃掉几十上百 GB 磁盘。更麻烦的是：
@@ -26,40 +35,43 @@ Wallpaper Engine 的壁纸动辄几 GB，订阅几十张不知不觉就吃掉几
 - **想批量退订**，客户端只能一张一张右键移除
 - **退订后反悔了**，文件已经被删，只能重新去创意工坊翻找
 
-WE Cleaner 把这些问题一次解决：缩略图卡片墙 + 精确占用统计 + 批量退订 + 操作历史一键恢复订阅。
+WE Cleaner 把这些问题一次解决：档案架 + 精确占用统计 + 批量退订 + 操作历史一键恢复订阅。
 
 ## 功能
 
 | 功能 | 说明 |
 |---|---|
-| 🖼 **缩略图卡片墙** | 每张壁纸显示预览图、标题、占用大小、安装时间、订阅状态，一眼看清 |
-| 🔍 **搜索与排序** | 按标题/ID 实时过滤；按占用大小、订阅时间排序，找出最占地的那几张 |
-| ⚡ **批量退订** | 勾选多张一次性退订，走 Steam 官方接口，Steam 自动删除文件并取消下载 |
-| 🔥 **退订并清理** | 一键完成「退订 + 删除本地文件」，不用分两步操作 |
-| 🗂 **分类过滤** | 全部 / 订阅中 / 未订阅 三个标签页，配合排序快速筛选 |
-| 🧹 **残留清理** | 自动识别「已退订但没删掉」的残留文件，精确清理，不误伤订阅中的内容 |
-| 🕘 **历史与恢复订阅** | 每次退订/删除都有记录，点一下就能重新订阅，Steam 自动重新下载 |
+| 🗄 **等距档案架 / 平铺网格** | 两种浏览布局：货架带 3D 卡片与顶面命中，平铺 32 张/页，适合快速扫图 |
+| 🖼 **缩略图与标题** | 每张壁纸显示预览图、标题、占用大小、安装时间、订阅状态，一眼看清 |
+| 🔍 **搜索与排序** | 按标题/ID 实时过滤；按占用大小、订阅时间（新→旧）排序 |
+| ⚡ **批量多选** | 整卡点击 / 盒角标记 / 空格加入批量集，底部操作条实时显示张数与总大小 |
+| 🔥 **智能清理** | 一次点击：订阅中的自动「退订 + 删文件」，未订阅的直接删文件 |
+| 🧹 **残留清理** | 识别「已退订但没删掉」的残留文件，只清理未订阅内容，绝不误伤订阅中的壁纸 |
+| 🕘 **历史与恢复订阅** | 每次退订/删除都有记录，一键重新订阅，Steam 自动重新下载 |
 | 🎬 **本地快速预览** | 不用打开 Wallpaper Engine，直接播放壁纸视频确认内容 |
+| 🎨 **外观** | 6 套配色 × 明暗模式，标本盒外壳可换，选择会被记住 |
 
 ## 快速开始
 
-1. 到 [Releases](https://github.com/xiaoyuyu6420/wallpaper-engine-cleaner/releases/latest) 下载 `WECleaner.exe`（免安装，约 20 MB）
+1. 到 [Releases](https://github.com/xiaoyuyu6420/wallpaper-engine-cleaner/releases/latest) 下载 `WECleanerNext.exe`（免安装，约 94 MB，前端资源已内置）
 2. 保持 **Steam 正在运行**，双击打开
-3. 自动扫描完成后：排序 / 搜索挑出不要的壁纸 → 勾选 → 「退订选中」
-4. 退订错了？点「🕘 历史」→ 勾选 → 「重新订阅勾选」，Steam 自动下回来
+3. 扫描完成后：搜索 / 排序 / 筛选找出不要的壁纸 → 选中 → 底部「⚡ 清理选中」
+4. 退订错了？切到 **历史** → 勾选 → 「重新订阅勾选」，Steam 自动下回来
 
-> 系统要求：Windows 10/11，已安装 Steam 和 Wallpaper Engine。首次运行若被 SmartScreen 提示，选择「更多信息 → 仍要运行」（未签名开源软件的正常提示）。
+> **系统要求**：Windows 10/11，已安装 Steam 和 Wallpaper Engine；界面基于 WebView2，Windows 11 自带，Windows 10 一般随 Edge 已安装（缺失时装 [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)）。首次运行若被 SmartScreen 提示，选择「更多信息 → 仍要运行」（未签名开源软件的正常提示）。
 
 ## 命令行
 
+图形界面之外，CLI 保留了全部能力（`run.py` 入口）：
+
 ```text
-WECleaner scan                            # 列出全部壁纸（大小/时间/订阅状态）
-WECleaner unsubscribe --list              # 列出当前订阅（只读预览）
-WECleaner unsubscribe --all               # 批量退订全部订阅
-WECleaner unsubscribe --id 123456         # 退订指定 ID
-WECleaner clean --all -y                  # 清理全部未订阅残留（默认进回收站）
-WECleaner history                         # 查看退订/删除历史
-WECleaner resubscribe --all               # 从历史一键恢复订阅
+wecleaner scan                            # 列出全部壁纸（大小/时间/订阅状态）
+wecleaner unsubscribe --list              # 列出当前订阅（只读预览）
+wecleaner unsubscribe --all               # 批量退订全部订阅
+wecleaner unsubscribe --id 123456         # 退订指定 ID
+wecleaner clean --all -y                  # 清理全部未订阅残留（默认进回收站）
+wecleaner history                         # 查看退订/删除历史
+wecleaner resubscribe --all               # 从历史一键恢复订阅
 ```
 
 ## 安全设计
@@ -90,11 +102,16 @@ WECleaner resubscribe --all               # 从历史一键恢复订阅
 
 ```bash
 uv sync
-uv run pyinstaller --onefile --clean --collect-all customtkinter --name WECleaner run.py
-# 产物：dist/WECleaner.exe
+uv run app.py            # 开发态启动新界面
+
+# 重新打包（产物 dist/WECleanerNext.exe）
+uv run pyinstaller --onefile --noconfirm --name WECleanerNext \
+  --collect-all webview --add-data "webui;webui" app.py
 ```
 
-技术栈：Python 3.12 · CustomTkinter · Pillow · PyInstaller（单文件打包）
+技术栈：Python 3.12 · pywebview（WebView2）· HTML / CSS / Canvas（无构建步骤）· Pillow · send2trash · PyInstaller。
+
+`wecleaner/gui.py` 是早期 CustomTkinter 界面，保留作回退方案；`run.py` 同时是 CLI 入口。
 
 ## 常见问题
 
@@ -106,6 +123,11 @@ uv run pyinstaller --onefile --clean --collect-all customtkinter --name WECleane
 <details>
 <summary><b>需要一直开着 Steam 吗？</b></summary>
 退订和恢复订阅需要 Steam 运行（走官方接口）。只浏览、搜索、查看占用则不需要。
+</details>
+
+<details>
+<summary><b>为什么打开后是只读 / 按钮变灰？</b></summary>
+Steam 没运行，或本地订阅记录缺失（ACF 里没有订阅清单）。此时工具无法确认哪些壁纸仍在订阅，会主动禁用删除。启动 Steam 并打开一次 Wallpaper Engine，重新扫描即可。
 </details>
 
 <details>

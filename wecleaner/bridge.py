@@ -219,6 +219,17 @@ class Api:
         return _err("busy")
 
     def _scan_worker(self) -> None:
+        # Steam 正在写入壁纸文件时（下载/删除），目录测量会极慢——提前告知用户
+        dl_hint = ""
+        try:
+            import glob
+            for lib in core.find_steam_libraries():
+                dl = os.path.join(lib, "steamapps", "workshop", "downloads", self.appid)
+                if os.path.isdir(dl) and os.listdir(dl):
+                    dl_hint = "Steam 正在后台下载壁纸（可能较慢），建议稍后再扫描"
+                    break
+        except Exception:  # noqa: BLE001
+            pass
         try:
             # 1) 先问运行中的 Steam 要权威订阅列表（含顺序 → subIndex）
             order: list[str] | None = None
@@ -229,6 +240,8 @@ class Api:
                         order = steamapi.get_subscribed_ordered()
                     else:
                         connect_error = steamapi.last_error
+                    if dl_hint:
+                        connect_error = (connect_error + "；" if connect_error else "") + dl_hint
                 except Exception as e:  # noqa: BLE001 - API 失败时回退 ACF（core 自己处理）
                     connect_error = str(e)
 

@@ -7,3 +7,8 @@ dist/
 docs/demo/
 webui/rhine-demo/_shot*.png
 webui/rhine-demo/_compare.png
+
+# dev screenshots / scratch
+webui/app/_verify/
+_*.txt
+_*.png
