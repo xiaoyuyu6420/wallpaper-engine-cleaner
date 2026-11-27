@@ -53,7 +53,7 @@ WE Cleaner 把这些问题一次解决：档案架 + 精确占用统计 + 批量
 
 ## 快速开始
 
-1. 到 [Releases](https://github.com/xiaoyuyu6420/wallpaper-engine-cleaner/releases/latest) 下载 `WECleanerNext.exe`（免安装，约 82 MB，前端资源已内置）
+1. 到 [Releases](https://github.com/xiaoyuyu6420/wallpaper-engine-cleaner/releases/latest) 下载 `WECleanerNext.exe`（免安装，约 78 MB，前端资源已内置）
 2. 保持 **Steam 正在运行**，双击打开
 3. 扫描完成后：搜索 / 排序 / 筛选找出不要的壁纸 → 选中 → 底部「⚡ 清理选中」
 4. 退订错了？切到 **历史** → 勾选 → 「重新订阅勾选」，Steam 自动下回来
